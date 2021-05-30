@@ -1,6 +1,4 @@
-
-
-# Google API OAUth Stuff
-CLIENT_ID = '885754310884-725vsgunbh9ohfmpuji6eb9qr834kleg.apps.googleusercontent.com'
-CLIENT_SECRET = 'krduD0MFgBj8KJ9vzVH8iOpX'
-URI = "http://localhost:5000/"
+# Auth0 API OAUth Stuff
+CLIENT_ID = 'XRt73mg358WwExx0hzwQfdRpR66U6ZfZ'
+CLIENT_SECRET = 'OliGGRu2yOEWBINQDNlovxcKY_gvsrjnkYcMSlPI3oXVGr1VoukDi69RUQJxPhV1'
+URI = "localhost:5000"
