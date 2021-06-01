@@ -1,0 +1,48 @@
+Property Entity:
+
+-> Street
+-> City
+-> State
+-> Country
+-> Available to Rent
+-> Rental Start Date
+-> Rental End Date
+-> Owner
+
+
+Renter Entity:
+
+-> First Name
+-> Last Name
+-> Phone Number
+
+Need To Do:
+
+Property Entity
+
+- POST REQUEST
+- GET 
+- PUT
+- PATCH
+- DELETE
+- Put renter in a house
+
+Renter Entity:
+
+- POST REQUEST
+- GET 
+- PUT
+- PATCH
+- DELETE
+- Show which house the owner is renting
+
+
+Status Codes
+
+- 200
+- 201
+- 204
+- 401
+- 403
+- 405
+- 406

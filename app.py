@@ -1,29 +1,29 @@
-
-import requests
-import constants
-import os
-import json
-
+from flask import Flask, jsonify, redirect, render_template, session
+from authlib.integrations.flask_client import OAuth
 from six.moves.urllib.request import urlopen
-
+from google.cloud import datastore
 from jose import jwt
 
-from flask import Flask, jsonify, redirect, render_template, session
-
-from authlib.integrations.flask_client import OAuth
-from google.cloud import datastore
+import requests
+import json
+import constants
+import property
+import renter
 
 app = Flask(__name__)
+app.register_blueprint(property.bp)
+app.register_blueprint(renter.bp)
 app.secret_key = 'SECRET_KEY'
-
-CLIENT_ID = constants.CLIENT_ID
-CLIENT_SECRET = constants.CLIENT_SECRET
-DOMAIN = "simple-airbnb-api-clone.us.auth0.com"
-client = datastore.Client()
 
 # Local URl
 CALLBACK_URL = 'http://localhost:5000/callback'
 oauth = OAuth(app)
+
+#OAUTH2
+CLIENT_ID = constants.CLIENT_ID
+CLIENT_SECRET = constants.CLIENT_SECRET
+DOMAIN = "simple-airbnb-api-clone.us.auth0.com"
+client = datastore.Client()
 
 ALGORITHMS = ["RS256"]
 oauth = OAuth(app)
@@ -148,6 +148,23 @@ def dashboard():
                            userinfo=session['profile'],
                            userinfo_pretty=json.dumps(session['jwt_payload'], indent=4),
                            userprofile_pretty=json.dumps(session['profile'], indent=4))
+
+@app.route("/delete_all", methods=['GET'])
+def delete_all():
+
+    properties = list(client.query(kind=constants.property).fetch())
+    for property in properties:
+
+        client.delete(property)
+
+    renters = list(client.query(kind=constants.renters).fetch())
+    for renter in renters:
+
+        client.delete(renter)
+
+    to_be_returned = ""
+    status_code = 202
+    return jsonify(to_be_returned), status_code
 
 if __name__ == '__main__':
 
