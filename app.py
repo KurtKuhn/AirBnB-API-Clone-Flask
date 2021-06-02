@@ -157,7 +157,7 @@ def delete_all():
 
         client.delete(property)
 
-    renters = list(client.query(kind=constants.renters).fetch())
+    renters = list(client.query(kind=constants.renter).fetch())
     for renter in renters:
 
         client.delete(renter)
