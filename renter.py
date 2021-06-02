@@ -13,6 +13,42 @@ def access_property():
         failure = {"Error": "request.accept_mimetimes is not accepted"}
         return jsonify(failure), 406
 
+    if request.method == 'GET':
+
+        query = client.query(kind=constants.renter)
+        q_limit = int(request.args.get('limit', 5))
+        q_offset = int(request.args.get('offset', 0))
+        iterator = query.fetch(limit=q_limit, offset=q_offset)
+
+        pages = iterator.pages
+        results = list(next(pages))
+
+        if iterator.next_page_token:
+            next_offset = q_offset + q_limit
+            next_url = request.base_url + "?limit=" + "&offset=" + str(next_offset)
+
+        else:
+            next_url = None
+
+        for e in results:
+            e["id"] = e.key.id
+            e["self"] = request.url + "/" + str(e.key.id)
+
+            # # Ensure there is a property index
+            # if e["property"]:
+            #
+            #     if len(e["property"]) > 0:
+            #
+            #         for property in e["property"]:
+            #             print("is we in here?")
+            #             property["self"] = request.url_root + "property/" + str(property["id"])
+
+        output = {"renter": results}
+        if next_url:
+            output["next"] = next_url
+
+        return (output), 200
+
     if request.method == 'POST':
 
         results = request.get_json()
@@ -135,7 +171,11 @@ def get_delete_property_id(renter_id):
 
                 if renter["id"] == curr_renter.key.id:
                     curr_property["renter"] = []
+                    curr_property["available"] = True
+                    curr_property["start date"] = ""
+                    curr_property["end date"] = ""
 
+            # client.update({"available": True})
             client.put(curr_property)
 
         client.delete(renter_key)

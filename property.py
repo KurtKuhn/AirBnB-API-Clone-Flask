@@ -27,6 +27,54 @@ def access_property():
         failure = {"Error": "request.accept_mimetimes is not accepted"}
         return jsonify(failure), 406
 
+    if request.method == 'GET':
+
+        # query = client.query(kind=constants.property)
+        # to_be_returned = list(query.fetch())
+        # status_code = 200
+        #
+        # for i in to_be_returned:
+        #     i["id"] = i.key.id
+        #     i["self"] = f'{constants.APP_URL}/property/{i.key.id}'
+        #
+        # # Return the results
+        # return jsonify(to_be_returned), status_code
+
+        query = client.query(kind=constants.property)
+
+        q_limit = int(request.args.get('limit', 5))
+        q_offset = int(request.args.get('offset', 0))
+        iterator = query.fetch(limit=q_limit, offset=q_offset)
+
+        print(iterator)
+
+        pages = iterator.pages
+        results = list(next(pages))
+
+        if iterator.next_page_token:
+            next_offset = q_offset + q_limit
+            next_url = request.base_url + "?limit=" + str(q_limit) + "&offset=" + str(next_offset)
+
+        else:
+            next_url = None
+
+        for e in results:
+            e["id"] = e.key.id
+            e["self"] = request.url + "/" + str(e.key.id)
+
+            # # Ensure there is a renter index
+            # if e["renter"]:
+            #     if len(e["renter"]) > 0:
+            #         for property in e["renter"]:
+            #             property["self"] = request.url_root + "property/" + str(property["id"])
+
+        output = {"property": results}
+        status_code = 200
+        if next_url:
+            output["next"] = next_url
+
+        return (output), 200
+
     if request.method == 'POST':
         results = request.get_json()
 
