@@ -1,9 +1,9 @@
 from google.cloud import datastore
-import json
 from flask import Blueprint, request, jsonify
+
+import app
 import constants
-import datetime
-import re
+import jwt
 
 client = datastore.Client()
 bp = Blueprint('property', __name__, url_prefix='/property')
@@ -20,8 +20,8 @@ def delete_all():
 
     return jsonify(to_be_returned), status_code
 
-@bp.route('', methods=['GET', 'POST'])
-def access_property():
+@bp.route('', methods=['GET'])
+def get_property():
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
@@ -29,24 +29,11 @@ def access_property():
 
     if request.method == 'GET':
 
-        # query = client.query(kind=constants.property)
-        # to_be_returned = list(query.fetch())
-        # status_code = 200
-        #
-        # for i in to_be_returned:
-        #     i["id"] = i.key.id
-        #     i["self"] = f'{constants.APP_URL}/property/{i.key.id}'
-        #
-        # # Return the results
-        # return jsonify(to_be_returned), status_code
-
         query = client.query(kind=constants.property)
 
         q_limit = int(request.args.get('limit', 5))
         q_offset = int(request.args.get('offset', 0))
         iterator = query.fetch(limit=q_limit, offset=q_offset)
-
-        print(iterator)
 
         pages = iterator.pages
         results = list(next(pages))
@@ -62,20 +49,28 @@ def access_property():
             e["id"] = e.key.id
             e["self"] = request.url + "/" + str(e.key.id)
 
-            # # Ensure there is a renter index
-            # if e["renter"]:
-            #     if len(e["renter"]) > 0:
-            #         for property in e["renter"]:
-            #             property["self"] = request.url_root + "property/" + str(property["id"])
-
         output = {"property": results}
-        status_code = 200
         if next_url:
             output["next"] = next_url
 
         return (output), 200
 
+    else:
+        failure = {"Error": "Request type is not accepted"}
+        return jsonify(failure), 405
+
+@bp.route('', methods=['POST'])
+def post_property():
+
+    if 'Authorization' not in request.headers:
+        return jsonify({"Error:" "Authorization header is needed"}), 401
+
+    if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
+        failure = {"Error": "request.accept_mimetimes is not accepted"}
+        return jsonify(failure), 406
+
     if request.method == 'POST':
+
         results = request.get_json()
 
         if "street" not in results.keys() \
@@ -97,6 +92,11 @@ def access_property():
         and "start date" in results.keys() \
         and "end date" in results.keys():
 
+            payload = jwt.verify_jwt(request)
+
+
+            print(f'payload["sub"]: {payload["sub"]}')
+
             curr_property = datastore.entity.Entity(key=client.key(constants.property))
             curr_property.update({"street": results["street"],
                                   "city": results["city"],
@@ -104,23 +104,29 @@ def access_property():
                                   "country": results["country"],
                                   "available": results["available"],
                                   "start date": results["start date"],
-                                  "end date": results["end date"]})
+                                  "end date": results["end date"],
+                                  "renter": results["renter"],
+                                  "owner": payload["sub"]})
 
             client.put(curr_property)
             data = curr_property
+            data["owner"] = payload["sub"]
             data["id"] = str(curr_property.id)
             data["self"] = f'{constants.APP_URL}'+ "/property/" + str(curr_property.id)
             return jsonify(data), 201
 
 
     else:
-        data = {"Error": "Method Not Allowed"}
+        data = {"Error": "Request type is not accepted"}
         status_code = 405
 
     return jsonify(data), status_code
 
-@bp.route('/<property_id>', methods=['GET', "PATCH", "PUT", "DELETE"])
-def get_delete_property_id(property_id):
+@bp.route('/<property_id>', methods=['GET'])
+def get_property_id(property_id):
+
+    if 'Authorization' not in request.headers:
+        payload = jwt.verify_jwt(request)
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
@@ -133,14 +139,31 @@ def get_delete_property_id(property_id):
         data = {"Error": "No property with that property_id exists"}
         return jsonify(data), 404
 
-    elif request.method == 'GET':
+    if request.method == 'GET':
 
         data = curr_property
         data["id"] = str(curr_property.id)
         data["self"] = f'{constants.APP_URL}' + "/property/" + str(curr_property.id)
         return jsonify(data), 201
 
-    elif request.method == 'PATCH':
+    else:
+        failure = {"Error": "Request type is not accepted"}
+        return jsonify(failure), 405
+
+@bp.route('/<property_id>', methods=['PATCH'])
+def patch_property_id(property_id):
+
+    if 'Authorization' not in request.headers:
+        payload = jwt.verify_jwt(request)
+
+    if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
+        failure = {"Error": "request.accept_mimetimes is not accepted"}
+        return jsonify(failure), 406
+
+    property_key = client.key(constants.property, int(property_id))
+    curr_property = client.get(key=property_key)
+
+    if request.method == 'PATCH':
 
         results = request.get_json()
 
@@ -181,9 +204,27 @@ def get_delete_property_id(property_id):
         data["self"] = f'{constants.APP_URL}' + "/property/" + str(curr_property.id)
         return jsonify(data), 201
 
-    elif request.method == "PUT":
+    else:
+        failure = {"Error": "Request type is not accepted"}
+        return jsonify(failure), 405
+
+@bp.route('/<property_id>', methods=['PUT'])
+def put_property_id(property_id):
+
+    if 'Authorization' not in request.headers:
+        payload = jwt.verify_jwt(request)
+
+    if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
+        failure = {"Error": "request.accept_mimetimes is not accepted"}
+        return jsonify(failure), 406
+
+    property_key = client.key(constants.property, int(property_id))
+    curr_property = client.get(key=property_key)
+
+    if request.method == "PUT":
 
         results = request.get_json()
+        print(results)
 
         if "street" not in results.keys() \
                 or "city" not in results.keys() \
@@ -209,6 +250,7 @@ def get_delete_property_id(property_id):
                                   "city": results["city"],
                                   "state": results["state"],
                                   "country": results["country"],
+                                  "renter": results["renter"],
                                   "available": results["available"],
                                   "start date": results["start date"],
                                   "end date": results["end date"]})
@@ -219,7 +261,20 @@ def get_delete_property_id(property_id):
             data["self"] = f'{constants.APP_URL}' + "/property/" + str(curr_property.id)
             return jsonify(data), 201
 
-    elif request.method == "DELETE":
+@bp.route('/<property_id>', methods=['DELETE'])
+def del_property_id(property_id):
+
+    if 'Authorization' not in request.headers:
+        payload = app.verify_jwt(request)
+
+    if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
+        failure = {"Error": "request.accept_mimetimes is not accepted"}
+        return jsonify(failure), 406
+
+    property_key = client.key(constants.property, int(property_id))
+    curr_property = client.get(key=property_key)
+
+    if request.method == "DELETE":
 
         if curr_property["renter"] != None or curr_property["renter"] == []:
 
@@ -238,8 +293,11 @@ def get_delete_property_id(property_id):
         failure = {"Error": "Request type is not accepted"}
         return jsonify(failure), 405
 
-@bp.route('/<property_id>/renter/<renter_id>', methods=['PUT', 'DELETE'])
-def put_del_renter_from_property(property_id, renter_id):
+@bp.route('/<property_id>/renter/<renter_id>', methods=['PUT'])
+def put_renter_to_property(property_id, renter_id):
+
+    if 'Authorization' not in request.headers:
+        payload = jwt.verify_jwt(request)
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
@@ -263,10 +321,9 @@ def put_del_renter_from_property(property_id, renter_id):
 
         results = request.get_json()
 
-        print(results)
-
         # Tie the renter -> property
-        if curr_renter["property"] == None:
+        print(len(curr_property["renter"]))
+        if curr_renter["property"] == None and len(curr_property["renter"]) == 0:
 
             property_self_url = str(request.url_root) + "property/" + str(curr_property.key.id)
             curr_renter.update({"property": { "id": str(curr_property.key.id),
@@ -284,24 +341,42 @@ def put_del_renter_from_property(property_id, renter_id):
                                   "start date": results["start date"],
                                   "end date": results["end date"]})
 
+            add_renter = {"id": curr_renter.key.id,
+                          "self": str(request.url_root) + "renter/" + str(curr_renter.key.id)}
+
+            # Update the property
+            renter_list = []
+            renter_list.append(add_renter)
+            curr_property.update({"renter": renter_list,
+                                  "self": f'{constants.APP_URL}' + "/renter/" + str(curr_renter.id)})
+
+            client.put(curr_property)
+            client.put(curr_renter)
+
+            data = curr_property
+            return jsonify(data), 204
+
         else:
-            failure = {"Error": "That specified renter assigned to another property"}
-            return jsonify(failure), 403
+            return jsonify({"Error": "Property already assigned or renter isn't associated with this property"}), 403
 
-        add_renter = {"id": curr_renter.key.id,
-                      "self": str(request.url_root) + "renter/" + str(curr_renter.key.id)}
+    else:
+        return jsonify({"Error": "Request type is not accepted"}), 405
 
-        # Update the property
-        renter_list = []
-        renter_list.append(add_renter)
-        curr_property.update({"renter": renter_list,
-                              "self": f'{constants.APP_URL}' + "/renter/" + str(curr_renter.id)})
+@bp.route('/<property_id>/renter/<renter_id>', methods=['DELETE'])
+def del_renter_from_property(property_id, renter_id):
 
-        client.put(curr_property)
-        client.put(curr_renter)
+    if 'Authorization' not in request.headers:
+        payload = jwt.verify_jwt(request)
 
-        data = curr_property
-        return jsonify(data), 204
+    if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
+        failure = {"Error": "request.accept_mimetimes is not accepted"}
+        return jsonify(failure), 406
+
+    property_key = client.key(constants.property, int(property_id))
+    curr_property = client.get(key=property_key)
+
+    renter_key = client.key(constants.renter, int(renter_id))
+    curr_renter = client.get(key=renter_key)
 
     if request.method == 'DELETE':
 
@@ -322,7 +397,6 @@ def put_del_renter_from_property(property_id, renter_id):
                 print(curr_renter.key.id)
 
                 renter_list = []
-                # renter_list.remove({"id": curr_renter.key.id})
 
                 curr_property.update({"renter": renter_list,
                                      "available": True,
@@ -347,19 +421,5 @@ def put_del_renter_from_property(property_id, renter_id):
         return jsonify(data), 204
 
     else:
-        return jsonify({"Error": "Method isn't recognized"}), 405
+        return jsonify({"Error": "Request type is not accepted"}), 405
 
-
-        # if curr_property["renter"] == None:
-        #     self_url = str(request.url_root) + "property/" + str(curr_property.key.id)
-        #     curr_property.update({"renter": {"id": str(curr_property.key.id),
-        #                                      "first name": curr_renter["first name"],
-        #                                      "last name:": curr_renter["last name"],
-        #                                      "phone number": curr_renter["phone number"],
-        #                                      "self": self_url}})
-        #
-        # else:
-        #     data = {"Error": "That specified load assigned to another boat"}
-        #     status_code = 403
-
-        curr_property.update()

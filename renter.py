@@ -6,8 +6,8 @@ import constants
 client = datastore.Client()
 bp = Blueprint('renter', __name__, url_prefix='/renter')
 
-@bp.route('', methods=['GET', 'POST'])
-def access_property():
+@bp.route('', methods=['GET'])
+def get_property():
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
@@ -34,20 +34,21 @@ def access_property():
             e["id"] = e.key.id
             e["self"] = request.url + "/" + str(e.key.id)
 
-            # # Ensure there is a property index
-            # if e["property"]:
-            #
-            #     if len(e["property"]) > 0:
-            #
-            #         for property in e["property"]:
-            #             print("is we in here?")
-            #             property["self"] = request.url_root + "property/" + str(property["id"])
-
         output = {"renter": results}
         if next_url:
             output["next"] = next_url
 
         return (output), 200
+
+    else:
+        return jsonify({"Error": "Request type is not accepted"}), 405
+
+@bp.route('', methods=['POST'])
+def post_property():
+
+    if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
+        failure = {"Error": "request.accept_mimetimes is not accepted"}
+        return jsonify(failure), 406
 
     if request.method == 'POST':
 
@@ -80,12 +81,8 @@ def access_property():
 
         return jsonify(data), status_code
 
-
     else:
-        data = {"Error": "Method Not Allowed"}
-        status_code = 405
-    return jsonify(data), status_code
-
+        return jsonify({"Error": "Request type is not accepted"}), 405
 
 @bp.route('/<renter_id>', methods=['GET', "PATCH", "PUT", "DELETE"])
 def get_delete_property_id(renter_id):

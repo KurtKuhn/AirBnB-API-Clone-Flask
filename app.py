@@ -1,19 +1,23 @@
-from flask import Flask, jsonify, redirect, render_template, session
+from flask import Flask, jsonify, redirect, render_template, session, request
 from authlib.integrations.flask_client import OAuth
 from six.moves.urllib.request import urlopen
 from google.cloud import datastore
 from jose import jwt
+
 
 import requests
 import json
 import constants
 import property
 import renter
+import jwt
 
 app = Flask(__name__)
 app.register_blueprint(property.bp)
 app.register_blueprint(renter.bp)
 app.secret_key = 'SECRET_KEY'
+
+client = datastore.Client()
 
 # Local URl
 CALLBACK_URL = 'http://localhost:5000/callback'
@@ -23,7 +27,6 @@ oauth = OAuth(app)
 CLIENT_ID = constants.CLIENT_ID
 CLIENT_SECRET = constants.CLIENT_SECRET
 DOMAIN = "simple-airbnb-api-clone.us.auth0.com"
-client = datastore.Client()
 
 ALGORITHMS = ["RS256"]
 oauth = OAuth(app)
@@ -40,86 +43,35 @@ auth0 = oauth.register(
 )
 
 
-# This code is adapted from
-# https://auth0.com/docs/quickstart/backend/python/01-authorization?_ga=2.46956069.349333901.1589042886-466012638.1589042885#create-the-jwt-validation-decorator
-
-class AuthError(Exception):
-    def __init__(self, error, status_code):
-        self.error = error
-        self.status_code = status_code
-
-@app.errorhandler(AuthError)
-def handle_auth_error(ex):
-    response = jsonify(ex.error)
-    response.status_code = ex.status_code
-    return response
-
-def verify_jwt(request):
-
-    auth_header = request.headers['Authorization'].split();
-    token = auth_header[1]
-
-    jsonurl = urlopen("https://" + DOMAIN + "/.well-known/jwks.json")
-    jwks = json.loads(jsonurl.read())
-    try:
-        unverified_header = jwt.get_unverified_header(token)
-    except jwt.JWTError:
-        raise AuthError({"code": "invalid_header",
-                         "description":
-                             "Invalid header. "
-                             "Use an RS256 signed JWT Access Token"}, 401)
-    if unverified_header["alg"] == "HS256":
-        raise AuthError({"code": "invalid_header",
-                         "description":
-                             "Invalid header. "
-                             "Use an RS256 signed JWT Access Token"}, 401)
-    rsa_key = {}
-    for key in jwks["keys"]:
-        if key["kid"] == unverified_header["kid"]:
-            rsa_key = {
-                "kty": key["kty"],
-                "kid": key["kid"],
-                "use": key["use"],
-                "n": key["n"],
-                "e": key["e"]
-            }
-    if rsa_key:
-        try:
-            payload = jwt.decode(
-                token,
-                rsa_key,
-                algorithms=ALGORITHMS,
-                audience=CLIENT_ID,
-                issuer="https://" + DOMAIN + "/"
-            )
-        except jwt.ExpiredSignatureError:
-            raise AuthError({"code": "token_expired",
-                             "description": "token is expired"}, 401)
-        except jwt.JWTClaimsError:
-            raise AuthError({"code": "invalid_claims",
-                             "description":
-                                 "incorrect claims,"
-                                 " please check the audience and issuer"}, 401)
-        except Exception:
-            raise AuthError({"code": "invalid_header",
-                             "description":
-                                 "Unable to parse authentication"
-                                 " token."}, 401)
-
-        return payload
-    else:
-        raise AuthError({"code": "no_rsa_key",
-                         "description":
-                             "No RSA key in JWKS"}, 401)
-
 @app.route('/')
 def index():
-    print("In index")
     return render_template("index.html")
+
+@app.route('/testing_authorization', methods=["POST"])
+def test_auth():
+
+    payload = jwt.verify_jwt(request)
+    print(payload)
+
+    return payload
+
+@app.route('/login', methods=['POST'])
+def login_user():
+    content = request.get_json()
+    username = content["username"]
+    password = content["password"]
+    body = {'grant_type': 'password', 'username': username,
+            'password': password,
+            'client_id': CLIENT_ID,
+            'client_secret': CLIENT_SECRET
+            }
+    headers = {'content-type': 'application/json'}
+    url = 'https://' + DOMAIN + '/oauth/token'
+    r = requests.post(url, json=body, headers=headers)
+    return r.text, 200, {'Content-Type': 'application/json'}
 
 @app.route('/ui_login')
 def ui_login():
-    print("ui_login")
     return auth0.authorize_redirect(redirect_uri=CALLBACK_URL)
 
 @app.route('/callback')
@@ -130,13 +82,30 @@ def callback_handling():
     resp = auth0.get('userinfo')
     userinfo = resp.json()
 
+    query = client.query(kind=constants.user)
+    results = list(query.fetch())
+
+    user_flag = False
+
+    for e in results:
+        if e["user id"] == userinfo["sub"]:
+            user_flag = True
+
+    if not user_flag:
+
+        new_user = datastore.entity.Entity(key=client.key(constants.user))
+        new_user.update({"user id": userinfo["sub"],
+                         "name": userinfo["name"]})
+
+        client.put(new_user)
+
     # Store the user information in flask session.
     session['jwt_payload'] = userinfo
 
     session['profile'] = {
         'user_id': userinfo['sub'],
         'name': userinfo['name'],
-        'auth0': id_token
+        'JWT': id_token
     }
     return redirect('/dashboard')
 
@@ -162,9 +131,28 @@ def delete_all():
 
         client.delete(renter)
 
+    owners = list(client.query(kind=constants.owner).fetch())
+
+    for owner in owners:
+        client.delete(owner)
+
     to_be_returned = ""
     status_code = 202
     return jsonify(to_be_returned), status_code
+
+@app.route("/get_users", methods=['GET'])
+def get_users():
+
+    query = client.query(kind=constants.user)
+    data = list(query.fetch())
+
+    print(data)
+    user_list = []
+    for e in data:
+        user_list.append(e)
+
+    return jsonify(data), 200
+
 
 if __name__ == '__main__':
 

@@ -7,3 +7,4 @@ APP_URL = "http://localhost:5000"
 # Constants
 property = 'property'
 renter = 'renter'
+user = 'user'
