@@ -1,7 +1,6 @@
 from google.cloud import datastore
 from flask import Blueprint, request, jsonify
 
-import app
 import constants
 import jwt
 
@@ -29,31 +28,73 @@ def get_property():
 
     if request.method == 'GET':
 
-        query = client.query(kind=constants.property)
+        if 'Authorization' in request.headers:
 
-        q_limit = int(request.args.get('limit', 5))
-        q_offset = int(request.args.get('offset', 0))
-        iterator = query.fetch(limit=q_limit, offset=q_offset)
+            payload = jwt.verify_jwt(request)
 
-        pages = iterator.pages
-        results = list(next(pages))
+            query = client.query(kind=constants.property)
 
-        if iterator.next_page_token:
-            next_offset = q_offset + q_limit
-            next_url = request.base_url + "?limit=" + str(q_limit) + "&offset=" + str(next_offset)
+            q_limit = int(request.args.get('limit', 5))
+            q_offset = int(request.args.get('offset', 0))
+            iterator = query.fetch(limit=q_limit, offset=q_offset)
+
+            pages = iterator.pages
+            results = list(next(pages))
+
+            if iterator.next_page_token:
+                next_offset = q_offset + q_limit
+                next_url = request.base_url + "?limit=" + str(q_limit) + "&offset=" + str(next_offset)
+
+            else:
+                next_url = None
+
+            users_list = []
+
+            for e in results:
+                if e["user id"] == payload["sub"]:
+                    e["user id"] = payload["sub"]
+                    users_list.append(e)
+
+            length_dic = {"total number": len(users_list)}
+            output = {"property": users_list}
+
+            if next_url:
+                output["next"] = next_url
+
+            return jsonify(length_dic, output), 200
 
         else:
-            next_url = None
 
-        for e in results:
-            e["id"] = e.key.id
-            e["self"] = request.url + "/" + str(e.key.id)
+            query = client.query(kind=constants.property)
 
-        output = {"property": results}
-        if next_url:
-            output["next"] = next_url
+            q_limit = int(request.args.get('limit', 5))
+            q_offset = int(request.args.get('offset', 0))
+            iterator = query.fetch(limit=q_limit, offset=q_offset)
 
-        return (output), 200
+            pages = iterator.pages
+            results = list(next(pages))
+
+            length_of_results = len(results)
+
+            if iterator.next_page_token:
+                next_offset = q_offset + q_limit
+                next_url = request.base_url + "?limit=" + str(q_limit) + "&offset=" + str(next_offset)
+
+            else:
+                next_url = None
+
+            for e in results:
+                e["id"] = e.key.id
+                e["self"] = request.url + "/" + str(e.key.id)
+                e["total number"]: length_of_results
+
+            length_dic = {"total number": length_of_results}
+            output = {"property": results}
+
+            if next_url:
+                output["next"] = next_url
+
+            return jsonify(length_dic, output), 200
 
     else:
         failure = {"Error": "Request type is not accepted"}
@@ -94,7 +135,6 @@ def post_property():
 
             payload = jwt.verify_jwt(request)
 
-
             print(f'payload["sub"]: {payload["sub"]}')
 
             curr_property = datastore.entity.Entity(key=client.key(constants.property))
@@ -106,11 +146,11 @@ def post_property():
                                   "start date": results["start date"],
                                   "end date": results["end date"],
                                   "renter": results["renter"],
-                                  "owner": payload["sub"]})
+                                  "user id": payload["sub"]})
 
             client.put(curr_property)
             data = curr_property
-            data["owner"] = payload["sub"]
+            data["user id"] = payload["sub"]
             data["id"] = str(curr_property.id)
             data["self"] = f'{constants.APP_URL}'+ "/property/" + str(curr_property.id)
             return jsonify(data), 201
@@ -224,7 +264,6 @@ def put_property_id(property_id):
     if request.method == "PUT":
 
         results = request.get_json()
-        print(results)
 
         if "street" not in results.keys() \
                 or "city" not in results.keys() \
@@ -265,7 +304,7 @@ def put_property_id(property_id):
 def del_property_id(property_id):
 
     if 'Authorization' not in request.headers:
-        payload = app.verify_jwt(request)
+        payload = jwt.verify_jwt(request)
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}

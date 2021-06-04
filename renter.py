@@ -1,8 +1,9 @@
 from google.cloud import datastore
-import json
-from flask import Blueprint, request, jsonify
-import constants
 
+from flask import Blueprint, request, jsonify
+
+import constants
+import jwt
 client = datastore.Client()
 bp = Blueprint('renter', __name__, url_prefix='/renter')
 
@@ -15,30 +16,70 @@ def get_property():
 
     if request.method == 'GET':
 
-        query = client.query(kind=constants.renter)
-        q_limit = int(request.args.get('limit', 5))
-        q_offset = int(request.args.get('offset', 0))
-        iterator = query.fetch(limit=q_limit, offset=q_offset)
+        if 'Authorization' in request.headers:
 
-        pages = iterator.pages
-        results = list(next(pages))
+            payload = jwt.verify_jwt(request)
 
-        if iterator.next_page_token:
-            next_offset = q_offset + q_limit
-            next_url = request.base_url + "?limit=" + "&offset=" + str(next_offset)
+            query = client.query(kind=constants.renter)
+
+            q_limit = int(request.args.get('limit', 5))
+            q_offset = int(request.args.get('offset', 0))
+            iterator = query.fetch(limit=q_limit, offset=q_offset)
+
+            pages = iterator.pages
+            results = list(next(pages))
+
+            if iterator.next_page_token:
+                next_offset = q_offset + q_limit
+                next_url = request.base_url + "?limit=" + str(q_limit) + "&offset=" + str(next_offset)
+
+            else:
+                next_url = None
+
+            renters_list = []
+
+            for e in results:
+                if e["user id"] == payload["sub"]:
+                    e["user id"] = payload["sub"]
+                    renters_list.append(e)
+
+            length_dic = {"total number": len(renters_list)}
+            output = {"renters": renters_list}
+
+            if next_url:
+                output["next"] = next_url
+
+            return jsonify(length_dic, output), 200
+
 
         else:
-            next_url = None
 
-        for e in results:
-            e["id"] = e.key.id
-            e["self"] = request.url + "/" + str(e.key.id)
+            query = client.query(kind=constants.renter)
+            q_limit = int(request.args.get('limit', 5))
+            q_offset = int(request.args.get('offset', 0))
+            iterator = query.fetch(limit=q_limit, offset=q_offset)
 
-        output = {"renter": results}
-        if next_url:
-            output["next"] = next_url
+            pages = iterator.pages
+            results = list(next(pages))
 
-        return (output), 200
+            if iterator.next_page_token:
+                next_offset = q_offset + q_limit
+                next_url = request.base_url + "?limit=" + "&offset=" + str(next_offset)
+
+            else:
+                next_url = None
+
+            for e in results:
+                e["id"] = e.key.id
+                e["self"] = request.url + "/" + str(e.key.id)
+
+            length_dic = {"total number": len(results)}
+
+            output = {"renter": results}
+            if next_url:
+                output["next"] = next_url
+
+            return jsonify(length_dic, output), 200
 
     else:
         return jsonify({"Error": "Request type is not accepted"}), 405
@@ -67,14 +108,20 @@ def post_property():
         and "last name"  in results.keys() \
         and "phone number" in results.keys():
 
+            payload = jwt.verify_jwt(request)
+
+            print(f'payload["sub"]: {payload["sub"]}')
+
             curr_renter = datastore.entity.Entity(key=client.key(constants.renter))
             curr_renter.update({"first name": results["first name"],
                                   "last name": results["last name"],
                                   "phone number": results["phone number"],
-                                  "property": None})
+                                  "property": None,
+                                  "user id": payload["sub"]})
 
             client.put(curr_renter)
             data = curr_renter
+            data["user id"]: payload["sub"]
             data["id"] = str(curr_renter.id)
             data["self"] = f'{constants.APP_URL}'+ "/renter/" + str(curr_renter.id)
             status_code = 201

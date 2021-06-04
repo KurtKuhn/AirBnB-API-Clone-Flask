@@ -20,7 +20,10 @@ app.secret_key = 'SECRET_KEY'
 client = datastore.Client()
 
 # Local URl
-CALLBACK_URL = 'http://localhost:5000/callback'
+# CALLBACK_URL = 'http://localhost:5000/callback'
+
+#Deployed URL
+CALLBACK_URL = 'https://portfolio-315300.wn.r.appspot.com/callback'
 oauth = OAuth(app)
 
 #OAUTH2
@@ -95,7 +98,9 @@ def callback_handling():
 
         new_user = datastore.entity.Entity(key=client.key(constants.user))
         new_user.update({"user id": userinfo["sub"],
-                         "name": userinfo["name"]})
+                         "name": userinfo["name"],
+                         "id": new_user.id,
+                         "self": f'{constants.APP_URL}' + "/user/" + str(new_user.id) })
 
         client.put(new_user)
 
@@ -131,10 +136,10 @@ def delete_all():
 
         client.delete(renter)
 
-    owners = list(client.query(kind=constants.owner).fetch())
+    users = list(client.query(kind=constants.user).fetch())
 
-    for owner in owners:
-        client.delete(owner)
+    for user in users:
+        client.delete(user)
 
     to_be_returned = ""
     status_code = 202
@@ -146,10 +151,9 @@ def get_users():
     query = client.query(kind=constants.user)
     data = list(query.fetch())
 
-    print(data)
-    user_list = []
     for e in data:
-        user_list.append(e)
+        e["id"] = e.key.id
+        e["self"] = f'{constants.APP_URL}' + "/users/" + str(e.key.id)
 
     return jsonify(data), 200
 
