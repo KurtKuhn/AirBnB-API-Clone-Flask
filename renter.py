@@ -99,8 +99,6 @@ def post_property():
         or "last name" not in results.keys() \
         or "phone number" not in results.keys():
 
-            print("Are you in here?")
-
             data = {"Error": "The request is missing or more attributes"}
             status_code = 400
 
@@ -134,6 +132,9 @@ def post_property():
 @bp.route('/<renter_id>', methods=['GET', "PATCH", "PUT", "DELETE"])
 def get_delete_property_id(renter_id):
 
+    if 'Authorization' not in request.headers:
+        return jsonify({"Error:" "Authorization header is needed"}), 401
+
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
         return jsonify(failure), 406
@@ -144,6 +145,11 @@ def get_delete_property_id(renter_id):
     if curr_renter == None:
         data = {"Error": "No renter with that renter_id exists"}
         return jsonify(data), 404
+
+    payload = jwt.verify_jwt(request)
+
+    if payload["sub"] != curr_renter["user id"]:
+        return jsonify({"Error": "That property is not associated with this user"}), 403
 
     elif request.method == 'GET':
 

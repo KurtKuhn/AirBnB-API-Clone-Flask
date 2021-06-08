@@ -166,11 +166,13 @@ def post_property():
 def get_property_id(property_id):
 
     if 'Authorization' not in request.headers:
-        payload = jwt.verify_jwt(request)
+        return jsonify({"Error:" "Authorization header is needed"}), 401
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
         return jsonify(failure), 406
+
+    payload = jwt.verify_jwt(request)
 
     property_key = client.key(constants.property, int(property_id))
     curr_property = client.get(key=property_key)
@@ -178,6 +180,9 @@ def get_property_id(property_id):
     if curr_property == None:
         data = {"Error": "No property with that property_id exists"}
         return jsonify(data), 404
+
+    if payload["sub"] != curr_property["user id"]:
+        return jsonify({"Error": "That property is not associated with this user"}), 403
 
     if request.method == 'GET':
 
@@ -194,14 +199,23 @@ def get_property_id(property_id):
 def patch_property_id(property_id):
 
     if 'Authorization' not in request.headers:
-        payload = jwt.verify_jwt(request)
+        return jsonify({"Error:" "Authorization header is needed"}), 401
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
         return jsonify(failure), 406
 
+    payload = jwt.verify_jwt(request)
+
     property_key = client.key(constants.property, int(property_id))
     curr_property = client.get(key=property_key)
+
+    if curr_property == None:
+        data = {"Error": "No property with that property_id exists"}
+        return jsonify(data), 404
+
+    if payload["sub"] != curr_property["user id"]:
+        return jsonify({"Error": "That property is not associated with this user"}), 403
 
     if request.method == 'PATCH':
 
@@ -252,14 +266,23 @@ def patch_property_id(property_id):
 def put_property_id(property_id):
 
     if 'Authorization' not in request.headers:
-        payload = jwt.verify_jwt(request)
+        return jsonify({"Error:" "Authorization header is needed"}), 401
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
         return jsonify(failure), 406
 
+    payload = jwt.verify_jwt(request)
+
     property_key = client.key(constants.property, int(property_id))
     curr_property = client.get(key=property_key)
+
+    if curr_property == None:
+        data = {"Error": "No property with that property_id exists"}
+        return jsonify(data), 404
+
+    if payload["sub"] != curr_property["user id"]:
+        return jsonify({"Error": "That property is not associated with this user"}), 403
 
     if request.method == "PUT":
 
@@ -304,14 +327,23 @@ def put_property_id(property_id):
 def del_property_id(property_id):
 
     if 'Authorization' not in request.headers:
-        payload = jwt.verify_jwt(request)
+        return jsonify({"Error:" "Authorization header is needed"}), 401
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
         return jsonify(failure), 406
 
+    payload = jwt.verify_jwt(request)
+
     property_key = client.key(constants.property, int(property_id))
     curr_property = client.get(key=property_key)
+
+    if curr_property == None:
+        data = {"Error": "No property with that property_id exists"}
+        return jsonify(data), 404
+
+    if payload["sub"] != curr_property["user id"]:
+        return jsonify({"Error": "That property is not associated with this user"}), 403
 
     if request.method == "DELETE":
 
@@ -336,7 +368,7 @@ def del_property_id(property_id):
 def put_renter_to_property(property_id, renter_id):
 
     if 'Authorization' not in request.headers:
-        payload = jwt.verify_jwt(request)
+        return jsonify({"Error:" "Authorization header is needed"}), 401
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
@@ -347,6 +379,15 @@ def put_renter_to_property(property_id, renter_id):
 
     renter_key = client.key(constants.renter, int(renter_id))
     curr_renter = client.get(key=renter_key)
+
+    payload = jwt.verify_jwt(request)
+
+    if curr_property == None:
+        data = {"Error": "No property with that property_id exists"}
+        return jsonify(data), 404
+
+    if payload["sub"] != curr_property["user id"]:
+        return jsonify({"Error": "That property is not associated with this user"}), 403
 
     if request.method == 'PUT':
 
@@ -405,14 +446,23 @@ def put_renter_to_property(property_id, renter_id):
 def del_renter_from_property(property_id, renter_id):
 
     if 'Authorization' not in request.headers:
-        payload = jwt.verify_jwt(request)
+        return jsonify({"Error:" "Authorization header is needed"}), 401
 
     if 'application/json' not in request.accept_mimetypes or '*/*' not in request.accept_mimetypes:
         failure = {"Error": "request.accept_mimetimes is not accepted"}
         return jsonify(failure), 406
 
+    payload = jwt.verify_jwt(request)
+
     property_key = client.key(constants.property, int(property_id))
     curr_property = client.get(key=property_key)
+
+    if curr_property == None:
+        data = {"Error": "No property with that property_id exists"}
+        return jsonify(data), 404
+
+    if payload["sub"] != curr_property["user id"]:
+        return jsonify({"Error": "That property is not associated with this user"}), 403
 
     renter_key = client.key(constants.renter, int(renter_id))
     curr_renter = client.get(key=renter_key)
